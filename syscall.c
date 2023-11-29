@@ -99,7 +99,7 @@ extern int sys_unlink(void);
 extern int sys_wait(void);
 extern int sys_write(void);
 extern int sys_uptime(void);
-extern char *syscallnames[];
+extern int sys_getprocinfo(void);
 
 static int (*syscalls[])(void) = {
     [SYS_fork] sys_fork,
@@ -123,15 +123,20 @@ static int (*syscalls[])(void) = {
     [SYS_link] sys_link,
     [SYS_mkdir] sys_mkdir,
     [SYS_close] sys_close,
+
+    [SYS_getprocinfo] sys_getprocinfo,
 };
 
+extern char *syscallnames[];
+
+// array for naming of sys calls
 char *syscallnames[] = {
     [SYS_fork] = "fork",
-    [SYS_pipe] = "pipe",
+    [SYS_exit] = "exit",
     [SYS_wait] = "wait",
+    [SYS_pipe] = "pipe",
     [SYS_read] = "read",
     [SYS_kill] = "kill",
-    [SYS_exit] = "exit",
     [SYS_exec] = "exec",
     [SYS_fstat] = "fstat",
     [SYS_chdir] = "chdir",
@@ -147,6 +152,7 @@ char *syscallnames[] = {
     [SYS_link] = "link",
     [SYS_mkdir] = "mkdir",
     [SYS_close] = "close",
+    [SYS_getprocinfo] = "getprocinfo",
 };
 
 void syscall(void)
@@ -158,8 +164,7 @@ void syscall(void)
   if (num > 0 && num < NELEM(syscalls) && syscalls[num])
   {
     curproc->tf->eax = syscalls[num]();
-    cprintf("%s -> %d\n",
-            syscallnames[num], curproc->tf->eax);
+    // cprintf("%s -> %d\n", syscallnames[num], curproc->tf->eax);
   }
   else
   {
