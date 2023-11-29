@@ -15,6 +15,9 @@
 #include "proc.h"
 #include "x86.h"
 
+#define BOOL_TRUE 1
+#define BOOL_FALSE 0
+
 static void consputc(int);
 
 static int panicked = 0;
@@ -186,7 +189,20 @@ struct {
   uint e;  // Edit index
 } input;
 
+
+#define UP_ARROW_KEY 226
+#define DOWN_ARROW_KEY 227
+#define MAX_HISTORY 16
+
+char buffs[MAX_HISTORY][INPUT_BUF];
+unsigned char activebuffs;
+unsigned char mrecentbuff;
+unsigned char nextbuff;
+unsigned char lastbuff;
+unsigned char equalBuffers;
+
 #define C(x)  ((x)-'@')  // Control-x
+//extern int killproc(void);
 
 void
 consoleintr(int (*getc)(void))
@@ -213,13 +229,129 @@ consoleintr(int (*getc)(void))
         consputc(BACKSPACE);
       }
       break;
+
+
+      //functionalities added
+     case UP_ARROW_KEY:
+      if(activebuffs>0){//Check if the command History is empty
+
+        //Update the position of the most recent buffer from the command history to an older one, unless it reaches the oldest one
+        if(lastbuff==BOOL_TRUE){
+          lastbuff=BOOL_FALSE;
+        }
+        else{
+          if(activebuffs<MAX_HISTORY){
+            if(mrecentbuff>0){
+              mrecentbuff--;
+            }
+          }else{
+            if(mrecentbuff!=nextbuff){
+              if(mrecentbuff>0){
+                mrecentbuff--;
+              }else{
+                mrecentbuff=MAX_HISTORY-1;
+              }
+            }
+          }
+        }
+
+        //Clean the input buffer and console
+        while(input.e != input.w && input.buf[(input.e-1) % INPUT_BUF] != '\n'){
+          input.e--;
+          consputc(BACKSPACE);
+        }
+
+        //Place into the input buffer and console the next Command history content
+        while(buffs[mrecentbuff][input.e-input.r] != '\n'){
+          input.buf[input.e]=buffs[mrecentbuff][input.e-input.r];
+          consputc(buffs[mrecentbuff][(input.e++)-input.r]);
+        }
+
+      }
+      break;
+
+    case DOWN_ARROW_KEY:
+      if(activebuffs>0){//Check if the command history is empty
+
+        //Update the position of the most recent buffer from the command history to a recent one, unless it reaches the most recent command
+        if(activebuffs<MAX_HISTORY){
+          if(mrecentbuff<activebuffs-1){
+            mrecentbuff++;
+            lastbuff=BOOL_FALSE;
+          }else{
+            lastbuff=BOOL_TRUE;
+          }
+        }else{
+          if(mrecentbuff<MAX_HISTORY-1){
+            if(mrecentbuff!=nextbuff-1){
+              mrecentbuff++;
+              lastbuff=BOOL_FALSE;
+            }else{
+              lastbuff=BOOL_TRUE;
+            }
+          }else{
+            if(nextbuff!=0){
+              mrecentbuff=0;
+              lastbuff=BOOL_FALSE;
+            }else{
+              lastbuff=BOOL_TRUE;
+            }
+          }
+        }
+
+        //Clean the input buffer and console
+        while(input.e != input.w && input.buf[(input.e-1) % INPUT_BUF] != '\n'){
+          input.e--;
+          consputc(BACKSPACE);
+        }
+
+        //Place into the input buffer and console the next Command history content, unless the most recent command was reached once before
+        if(lastbuff==BOOL_FALSE){
+          while(buffs[mrecentbuff][input.e-input.r] != '\n'){
+            input.buf[input.e]=buffs[mrecentbuff][input.e-input.r];
+            consputc(buffs[mrecentbuff][(input.e++)-input.r]);
+          }
+        }
+
+      }
+      break;
+    
+
     default:
-      if(c != 0 && input.e-input.r < INPUT_BUF){
+     if(c != 0 && input.e-input.r < INPUT_BUF){
         c = (c == '\r') ? '\n' : c;
         input.buf[input.e++ % INPUT_BUF] = c;
         consputc(c);
         if(c == '\n' || c == C('D') || input.e == input.r+INPUT_BUF){
           input.w = input.e;
+
+          if(input.e!=input.r+1){//Save buffer only if it isn't empty
+
+            //Check if the new command is the same that the last one saved
+            equalBuffers=BOOL_TRUE;
+            for(input.e=input.r;input.e<input.w;input.e++){
+              if(buffs[mrecentbuff][input.e-input.r]!=input.buf[input.e]){
+                equalBuffers=BOOL_FALSE;
+                break;
+              }
+            }
+
+            //Save the new command to the command History only if it's different from the last command saved
+            if(equalBuffers==BOOL_FALSE){
+              for(input.e=input.r;input.e<input.w;input.e++){
+                buffs[nextbuff][input.e-input.r]=input.buf[input.e];
+              }
+
+              mrecentbuff = nextbuff;
+              nextbuff=(nextbuff+1) % MAX_HISTORY;
+              lastbuff=BOOL_TRUE;
+
+              if(activebuffs<MAX_HISTORY){
+                activebuffs++;
+              }
+            }
+
+          }
           wakeup(&input.r);
         }
       }
@@ -293,7 +425,6 @@ consoleinit(void)
   devsw[CONSOLE].write = consolewrite;
   devsw[CONSOLE].read = consoleread;
   cons.locking = 1;
-
   ioapicenable(IRQ_KBD, 0);
 }
 
